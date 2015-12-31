@@ -204,3 +204,84 @@ final part, I find the symmetry of the `JOIN`s to be clear.
 
   Now the query is more compact, but also faster, because we add the
   edge cases in the same "swoop".
+
+** In the SpacePositions and SplitPositions CTEs
+
+   Yes, in the -Positions CTEs we do this as well, although this is a
+   bit less clear at first, and will probably not gain as much in
+   readability or performance.  For completeness, I will explain it
+   here as well.
+
+   The edge case is the final position.  It does not contain a space,
+   but needs to be taken into account as well.  Or does it?  Now that
+   we take `@MaxLen` where there is no space to split on, we will take
+   `@MaxLen` also when there is no space /left/ to split on.  Which
+   may or may not be past the end of the input string.  Lets see what
+   happens if we just remove the `SplitPositions` CTE.  I will add
+   some additional test data to see what happens:
+
+#+BEGIN_SRC sql
+  INSERT INTO Organisations ([OrganisationName])
+  SELECT SUBSTRING(OrganisationName, 1, 180)
+    FROM ( SELECT 'Microsoft Corporation'
+           UNION ALL SELECT 'S&T System Integration & Technology Distribution Aktiengesellschaft'
+           UNION ALL SELECT 'VeryLongOrganisationNameThatWillHaveToBeSplitWithoutASpace Because It Really Is A Long Name, But In The Second Column We Can Split It'
+           UNION ALL SELECT 'Another VeryLongOrganisationNameThatWillHaveToBeSplitWithoutASpaceButOnlyInTheSecondColumn, Because It Really Is A Long Name'
+           UNION ALL SELECT 'AnotherVeryLongOrganisationNameThatWillHaveToBeSplitWithoutASpaceBecauseItReallyIsALongNameButNowItEvenExceedsTheLimitOfAllThreeColumnsWithAMaximumLenghtOf50Characters(WhichIsACombinedTotalOf150Characters)AndNowWeDon''tHaveAnythingToPutInTheLastBox'
+           UNION ALL SELECT 'OneWordOnly'
+           UNION ALL SELECT 'A' -- Single letter edge case
+           UNION ALL SELECT '' -- Empty string edge case
+         ) Data(OrganisationName);
+#+END_SRC
+
+  Now when, after the query, we run
+
+#+BEGIN_SRC sql
+  SELECT *, LEN(Name1), LEN(Name2), LEN(Name3) FROM dbo.OrgStaging;
+#+END_SRC
+
+  The results are:
+
+| OrganisationID |                                              Name1 |                                              Name2 |                                              Name3 |    |    |    |
+|----------------|----------------------------------------------------|----------------------------------------------------|----------------------------------------------------|----|----|----|
+|              1 |                              Microsoft Corporation |                                                    |                                                    | 21 |  0 |  0 |
+|              2 |   S&T System Integration & Technology Distribution |                                 Aktiengesellschaft |                                                    | 48 | 18 |  0 |
+|              3 | VeryLongOrganisationNameThatWillHaveToBeSplitWitho |  utASpace Because It Really Is A Long Name, But In |                  The Second Column We Can Split It | 50 | 49 | 33 |
+|              4 |                                            Another | VeryLongOrganisationNameThatWillHaveToBeSplitWitho |       utASpaceButOnlyInTheSecondColumn, Because It |  7 | 50 | 44 |
+|              5 | AnotherVeryLongOrganisationNameThatWillHaveToBeSpl | itWithoutASpaceBecauseItReallyIsALongNameButNowItE | venExceedsTheLimitOfAllThreeColumnsWithAMaximumLen | 50 | 50 | 50 |
+|              6 |                                        OneWordOnly |                                                    |                                                    | 11 |  0 |  0 |
+|              7 |                                                  A |                                                    |                                                    |  1 |  0 |  0 |
+|              8 |                                                    |                                                    |                                                    |  0 |  0 |  0 |
+
+  Now lets remove the SplitPositions CTE, and add the `- 1` to the
+  SpacePositions CTE.  Furthermore, we replace all references to
+  SplitPositions to refer to SpacePositions (of course).
+
+#+BEGIN_SRC sql
+    WITH SpacePositions AS
+       ( SELECT O.OrganisationID
+              , CHARINDEX(' ', O.OrganisationName, 0) - 1 AS Position
+           FROM dbo.Organisations O
+          UNION ALL
+         SELECT O.OrganisationID
+              , CHARINDEX(' ', O.OrganisationName, S.Position + 2) - 1 AS Position
+           FROM dbo.Organisations O
+          INNER JOIN SpacePositions S
+                  ON CHARINDEX(' ', O.OrganisationName, S.Position + 2) - 1 > S.Position
+                 AND S.OrganisationID = O.OrganisationID
+       )
+       , FirstChunk AS
+#+END_SRC
+
+| OrganisationID |                                              Name1 |                                              Name2 |                                              Name3 |    |    |    |
+|----------------|----------------------------------------------------|----------------------------------------------------|----------------------------------------------------|----|----|----|
+|              1 |                                          Microsoft |                                        Corporation |                                                    |  9 | 11 |  0 |
+|              2 |   S&T System Integration & Technology Distribution |                                 Aktiengesellschaft |                                                    | 48 | 18 |  0 |
+|              3 | VeryLongOrganisationNameThatWillHaveToBeSplitWitho |  utASpace Because It Really Is A Long Name, But In |                     The Second Column We Can Split | 50 | 49 | 30 |
+|              4 |                                            Another | VeryLongOrganisationNameThatWillHaveToBeSplitWitho |       utASpaceButOnlyInTheSecondColumn, Because It |  7 | 50 | 44 |
+|              5 | AnotherVeryLongOrganisationNameThatWillHaveToBeSpl | itWithoutASpaceBecauseItReallyIsALongNameButNowItE | venExceedsTheLimitOfAllThreeColumnsWithAMaximumLen | 50 | 50 | 50 |
+|              6 |                                        OneWordOnly |                                                    |                                                    | 11 |  0 |  0 |
+|              7 |                                                  A |                                                    |                                                    |  1 |  0 |  0 |
+|              8 |                                                    |                                                    |                                                    |  0 |  0 |  0 |
+
+Looks good to me :)

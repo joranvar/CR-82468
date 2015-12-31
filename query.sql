@@ -2,25 +2,15 @@ DECLARE @MaxLen int = 50;     -- Maximum length of a target column
 
   WITH SpacePositions AS
      ( SELECT O.OrganisationID
-            , CHARINDEX(' ', O.OrganisationName, 0) AS Position
+            , CHARINDEX(' ', O.OrganisationName, 0) - 1 AS Position
          FROM dbo.Organisations O
         UNION ALL
        SELECT O.OrganisationID
-            , CHARINDEX(' ', O.OrganisationName, S.Position + 1) AS Position
+            , CHARINDEX(' ', O.OrganisationName, S.Position + 2) - 1 AS Position
          FROM dbo.Organisations O
         INNER JOIN SpacePositions S
-                ON CHARINDEX(' ', O.OrganisationName, S.Position + 1) > S.Position
+                ON CHARINDEX(' ', O.OrganisationName, S.Position + 2) - 1 > S.Position
                AND S.OrganisationID = O.OrganisationID
-     )
-     , SplitPositions AS
-     ( SELECT S.OrganisationID
-            , S.Position - 1 AS Position
-         FROM SpacePositions S
-        WHERE S.Position != 0
-        UNION
-       SELECT O.OrganisationID
-            , LEN(O.OrganisationName) AS Position
-         FROM dbo.Organisations O
      )
      , FirstChunk AS
      ( SELECT O.OrganisationID
@@ -29,7 +19,7 @@ DECLARE @MaxLen int = 50;     -- Maximum length of a target column
          FROM dbo.Organisations O
          LEFT JOIN ( SELECT S.OrganisationID
                           , S.Position + 1 AS Position
-                       FROM SplitPositions S
+                       FROM SpacePositions S
                       WHERE Position BETWEEN 1 AND @MaxLen
                    ) D ON D.OrganisationID = O.OrganisationID
           GROUP BY O.OrganisationID
@@ -41,7 +31,7 @@ DECLARE @MaxLen int = 50;     -- Maximum length of a target column
          FROM FirstChunk C
          LEFT JOIN ( SELECT S.OrganisationID
                           , S.Position + 1 AS Position
-                       FROM SplitPositions S
+                       FROM SpacePositions S
                       INNER JOIN FirstChunk C ON C.OrganisationID = S.OrganisationID
                       WHERE S.Position BETWEEN C.ChunkEnd + 1 AND C.ChunkEnd + @MaxLen
                    ) D ON D.OrganisationID = C.OrganisationID
@@ -54,7 +44,7 @@ DECLARE @MaxLen int = 50;     -- Maximum length of a target column
          FROM SecondChunk C
          LEFT JOIN ( SELECT S.OrganisationID
                           , S.Position + 1 AS Position
-                       FROM SplitPositions S
+                       FROM SpacePositions S
                       INNER JOIN SecondChunk C ON C.OrganisationID = S.OrganisationID
                       WHERE S.Position BETWEEN C.ChunkEnd + 1 AND C.ChunkEnd + @MaxLen
                    ) D ON D.OrganisationID = C.OrganisationID
