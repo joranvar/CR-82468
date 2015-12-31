@@ -129,3 +129,78 @@ There is still some compactness to be gained if you write `JOIN`s with
 just one `ON` clause on a single line, but only when that `JOIN` is
 trivial (for instance on matching primary keys).  Especially in the
 final part, I find the symmetry of the `JOIN`s to be clear.
+
+* Use `LEFT JOIN` and `COALESCE` for edge cases
+
+   Four times you add a `UNION` on a subquery to account for an edge
+   case.  Three of those are when you want to split on `@MaxLen`,
+   because there is no shorter match.  But there is another way to do
+   that.
+
+   In SQL, missing data is represented as a `NULL` value.  When we use
+   an `INNER JOIN`, those `NULL`s disappear, because we can only join
+   on data that we know.  Adding missing data afterwards through a
+   `UNION` and a back reference (querying the same data but asking
+   where it is missing) is possible.  But we can also just take those
+   `NULL`s with an `OUTER JOIN` (mostly `LEFT` or `RIGHT`), and tell
+   SQL to replace missing values by something else, using [[https://msdn.microsoft.com/en-us/library/ms190349.aspx][`COALESCE`]].
+
+** In the Chunk CTEs
+
+    In the FirstChunk, we only know that something is missing if we know
+    of all the organisations, so we need to select the data from the
+    origin as well:
+
+  #+BEGIN_SRC sql
+         , FirstChunk AS
+         ( SELECT O.OrganisationID
+                , 1 AS ChunkStart
+                , COALESCE(MAX(D.Position), @MaxLen) AS ChunkEnd
+             FROM dbo.Organisations O
+             LEFT JOIN ( SELECT S.OrganisationID
+                              , S.Position + 1 AS Position
+                           FROM SplitPositions S
+                          WHERE Position BETWEEN 1 AND @MaxLen
+                       ) D ON D.OrganisationID = O.OrganisationID
+              GROUP BY O.OrganisationID
+         )
+  #+END_SRC
+
+    Notice that we don't select `D.OrganisationID` for the first column
+    any more, because that can also be `NULL` if we can't split.  That
+    also means that we need to `GROUP BY` the newly selected value.
+
+    In the other two CTEs, we can just take the existing values of the
+    previous CTEs:
+
+  #+BEGIN_SRC sql
+         , SecondChunk AS
+         ( SELECT C.OrganisationID
+                , C.ChunkEnd + 1 AS ChunkStart
+                , COALESCE(MAX(D.Position), C.ChunkEnd + @MaxLen) AS ChunkEnd
+             FROM FirstChunk C
+             LEFT JOIN ( SELECT S.OrganisationID
+                              , S.Position + 1 AS Position
+                           FROM SplitPositions S
+                          INNER JOIN FirstChunk C ON C.OrganisationID = S.OrganisationID
+                          WHERE S.Position BETWEEN C.ChunkEnd + 1 AND C.ChunkEnd + @MaxLen
+                       ) D ON D.OrganisationID = C.OrganisationID
+            GROUP BY C.OrganisationID, C.ChunkEnd
+         )
+         , ThirdChunk AS
+         ( SELECT C.OrganisationID
+                , C.ChunkEnd + 1 AS ChunkStart
+                , COALESCE(MAX(D.Position), C.ChunkEnd + @MaxLen) AS ChunkEnd
+             FROM SecondChunk C
+             LEFT JOIN ( SELECT S.OrganisationID
+                              , S.Position + 1 AS Position
+                           FROM SplitPositions S
+                          INNER JOIN SecondChunk C ON C.OrganisationID = S.OrganisationID
+                          WHERE S.Position BETWEEN C.ChunkEnd + 1 AND C.ChunkEnd + @MaxLen
+                       ) D ON D.OrganisationID = C.OrganisationID
+            GROUP BY C.OrganisationID, C.ChunkEnd
+         )
+  #+END_SRC
+
+  Now the query is more compact, but also faster, because we add the
+  edge cases in the same "swoop".

@@ -23,68 +23,40 @@ DECLARE @MaxLen int = 50;     -- Maximum length of a target column
          FROM dbo.Organisations O
      )
      , FirstChunk AS
-     ( SELECT D.OrganisationID
+     ( SELECT O.OrganisationID
             , 1 AS ChunkStart
-            , MAX(D.Position) AS ChunkEnd
-         FROM ( SELECT S.OrganisationID
-                     , S.Position + 1 AS Position
-                  FROM SplitPositions S
-                 WHERE Position BETWEEN 1 AND @MaxLen
-                 UNION
-                SELECT S.OrganisationID
-                     , @MaxLen
-                  FROM SplitPositions S
-                 WHERE NOT EXISTS ( SELECT *
-                                      FROM SplitPositions SI
-                                     WHERE SI.Position BETWEEN 1 AND @MaxLen
-                                       AND SI.OrganisationID = S.OrganisationID
-                                  )
-              ) D
-          GROUP BY D.OrganisationID
+            , COALESCE(MAX(D.Position), @MaxLen) AS ChunkEnd
+         FROM dbo.Organisations O
+         LEFT JOIN ( SELECT S.OrganisationID
+                          , S.Position + 1 AS Position
+                       FROM SplitPositions S
+                      WHERE Position BETWEEN 1 AND @MaxLen
+                   ) D ON D.OrganisationID = O.OrganisationID
+          GROUP BY O.OrganisationID
      )
      , SecondChunk AS
      ( SELECT C.OrganisationID
             , C.ChunkEnd + 1 AS ChunkStart
-            , MAX(D.Position) AS ChunkEnd
+            , COALESCE(MAX(D.Position), C.ChunkEnd + @MaxLen) AS ChunkEnd
          FROM FirstChunk C
-        INNER JOIN ( SELECT S.OrganisationID
+         LEFT JOIN ( SELECT S.OrganisationID
                           , S.Position + 1 AS Position
                        FROM SplitPositions S
                       INNER JOIN FirstChunk C ON C.OrganisationID = S.OrganisationID
                       WHERE S.Position BETWEEN C.ChunkEnd + 1 AND C.ChunkEnd + @MaxLen
-                      UNION
-                     SELECT S.OrganisationID
-                          , C.ChunkEnd + @MaxLen AS Position
-                       FROM SplitPositions S
-                      INNER JOIN FirstChunk C ON C.OrganisationID = S.OrganisationID
-                      WHERE NOT EXISTS ( SELECT *
-                                           FROM SplitPositions SI
-                                          WHERE SI.Position BETWEEN C.ChunkEnd + 1 AND C.ChunkEnd + @MaxLen
-                                            AND OrganisationID = C.OrganisationID
-                                       )
                    ) D ON D.OrganisationID = C.OrganisationID
         GROUP BY C.OrganisationID, C.ChunkEnd
      )
      , ThirdChunk AS
      ( SELECT C.OrganisationID
             , C.ChunkEnd + 1 AS ChunkStart
-            , MAX(D.Position) AS ChunkEnd
+            , COALESCE(MAX(D.Position), C.ChunkEnd + @MaxLen) AS ChunkEnd
          FROM SecondChunk C
-        INNER JOIN ( SELECT S.OrganisationID
+         LEFT JOIN ( SELECT S.OrganisationID
                           , S.Position + 1 AS Position
                        FROM SplitPositions S
                       INNER JOIN SecondChunk C ON C.OrganisationID = S.OrganisationID
                       WHERE S.Position BETWEEN C.ChunkEnd + 1 AND C.ChunkEnd + @MaxLen
-                      UNION
-                     SELECT S.OrganisationID
-                          , C.ChunkEnd + @MaxLen AS Position
-                       FROM SplitPositions S
-                      INNER JOIN SecondChunk C ON C.OrganisationID = S.OrganisationID
-                      WHERE NOT EXISTS ( SELECT *
-                                           FROM SplitPositions SI
-                                          WHERE SI.Position BETWEEN C.ChunkEnd + 1 AND C.ChunkEnd + @MaxLen
-                                            AND OrganisationID = C.OrganisationID
-                                       )
                    ) D ON D.OrganisationID = C.OrganisationID
         GROUP BY C.OrganisationID, C.ChunkEnd
      )
