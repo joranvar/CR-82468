@@ -1,5 +1,12 @@
 #+OPTIONS: toc:nil ^:{}
 
+* A nitpick
+
+This first point will not really change the query, and it is probably
+only added for testing purposes, but an =ORDER BY= with an =INSERT
+INTO= statement does not really do anything useful (unless you insert
+into a table with an =IDENTITY= column).
+
 * Us a more compact style
 
 It looks like you either have a very strong policy on style and
