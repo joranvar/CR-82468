@@ -1,7 +1,9 @@
+#+OPTIONS: toc:nil ^:{}
+
 * Us a more compact style
 
 It looks like you either have a very strong policy on style and
-layout, or used an auto-formatter, because in some places, `SELECT *`
+layout, or used an auto-formatter, because in some places, =SELECT *=
 is written in two lines.  That is good, because the query is at least
 well formatted and readable.  If you want it to be more compact,
 though, you might want to skimp a bit on the newlines.
@@ -15,8 +17,8 @@ parts (my indentation is by no means the default in SQL) and a thing I
 call "one concept per line", where each line tells me something that
 can stand on its own for logic.
 
-Not indenting `UNION`s helps to see the "equal level" of both sides of
-the `UNION`, and prevents the lines from getting too long.
+Not indenting =UNION= s helps to see the "equal level" of both sides of
+the =UNION=, and prevents the lines from getting too long.
 
 #+BEGIN_SRC sql
   DECLARE @MaxLen int = 50;     -- Maximum length of a target column
@@ -125,25 +127,25 @@ the `UNION`, and prevents the lines from getting too long.
    ORDER BY O.OrganisationID;
 #+END_SRC
 
-There is still some compactness to be gained if you write `JOIN`s with
-just one `ON` clause on a single line, but only when that `JOIN` is
+There is still some compactness to be gained if you write =JOIN= s with
+just one =ON= clause on a single line, but only when that =JOIN= is
 trivial (for instance on matching primary keys).  Especially in the
-final part, I find the symmetry of the `JOIN`s to be clear.
+final part, I find the symmetry of the =JOIN= s to be clear.
 
-* Use `LEFT JOIN` and `COALESCE` for edge cases
+* Use =LEFT JOIN= and =COALESCE= for edge cases
 
-   Four times you add a `UNION` on a subquery to account for an edge
-   case.  Three of those are when you want to split on `@MaxLen`,
+   Four times you add a =UNION= on a subquery to account for an edge
+   case.  Three of those are when you want to split on =@MaxLen=,
    because there is no shorter match.  But there is another way to do
    that.
 
-   In SQL, missing data is represented as a `NULL` value.  When we use
-   an `INNER JOIN`, those `NULL`s disappear, because we can only join
+   In SQL, missing data is represented as a =NULL= value.  When we use
+   an =INNER JOIN=, those =NULL= s disappear, because we can only join
    on data that we know.  Adding missing data afterwards through a
-   `UNION` and a back reference (querying the same data but asking
+   =UNION= and a back reference (querying the same data but asking
    where it is missing) is possible.  But we can also just take those
-   `NULL`s with an `OUTER JOIN` (mostly `LEFT` or `RIGHT`), and tell
-   SQL to replace missing values by something else, using [[https://msdn.microsoft.com/en-us/library/ms190349.aspx][`COALESCE`]].
+   =NULL= s with an =OUTER JOIN= (mostly =LEFT= or =RIGHT=), and tell
+   SQL to replace missing values by something else, using [[https://msdn.microsoft.com/en-us/library/ms190349.aspx][=COALESCE=]].
 
 ** In the Chunk CTEs
 
@@ -166,9 +168,9 @@ final part, I find the symmetry of the `JOIN`s to be clear.
          )
   #+END_SRC
 
-    Notice that we don't select `D.OrganisationID` for the first column
-    any more, because that can also be `NULL` if we can't split.  That
-    also means that we need to `GROUP BY` the newly selected value.
+    Notice that we don't select =D.OrganisationID= for the first column
+    any more, because that can also be =NULL= if we can't split.  That
+    also means that we need to =GROUP BY= the newly selected value.
 
     In the other two CTEs, we can just take the existing values of the
     previous CTEs:
@@ -214,10 +216,10 @@ final part, I find the symmetry of the `JOIN`s to be clear.
 
    The edge case is the final position.  It does not contain a space,
    but needs to be taken into account as well.  Or does it?  Now that
-   we take `@MaxLen` where there is no space to split on, we will take
-   `@MaxLen` also when there is no space /left/ to split on.  Which
+   we take =@MaxLen= where there is no space to split on, we will take
+   =@MaxLen= also when there is no space /left/ to split on.  Which
    may or may not be past the end of the input string.  Lets see what
-   happens if we just remove the `SplitPositions` CTE.  I will add
+   happens if we just remove the =SplitPositions= CTE.  I will add
    some additional test data to see what happens:
 
 #+BEGIN_SRC sql
@@ -242,6 +244,7 @@ final part, I find the symmetry of the `JOIN`s to be clear.
 
   The results are:
 
+#+BEGIN_EXAMPLE
 | OrganisationID |                                              Name1 |                                              Name2 |                                              Name3 |    |    |    |
 |----------------|----------------------------------------------------|----------------------------------------------------|----------------------------------------------------|----|----|----|
 |              1 |                              Microsoft Corporation |                                                    |                                                    | 21 |  0 |  0 |
@@ -252,8 +255,9 @@ final part, I find the symmetry of the `JOIN`s to be clear.
 |              6 |                                        OneWordOnly |                                                    |                                                    | 11 |  0 |  0 |
 |              7 |                                                  A |                                                    |                                                    |  1 |  0 |  0 |
 |              8 |                                                    |                                                    |                                                    |  0 |  0 |  0 |
+#+END_EXAMPLE
 
-  Now lets remove the SplitPositions CTE, and add the `- 1` to the
+  Now lets remove the SplitPositions CTE, and add the =- 1= to the
   SpacePositions CTE.  Furthermore, we replace all references to
   SplitPositions to refer to SpacePositions (of course).
 
@@ -273,6 +277,9 @@ final part, I find the symmetry of the `JOIN`s to be clear.
        , FirstChunk AS
 #+END_SRC
 
+Which yields:
+
+#+BEGIN_EXAMPLE
 | OrganisationID |                                              Name1 |                                              Name2 |                                              Name3 |    |    |    |
 |----------------|----------------------------------------------------|----------------------------------------------------|----------------------------------------------------|----|----|----|
 |              1 |                                          Microsoft |                                        Corporation |                                                    |  9 | 11 |  0 |
@@ -283,5 +290,6 @@ final part, I find the symmetry of the `JOIN`s to be clear.
 |              6 |                                        OneWordOnly |                                                    |                                                    | 11 |  0 |  0 |
 |              7 |                                                  A |                                                    |                                                    |  1 |  0 |  0 |
 |              8 |                                                    |                                                    |                                                    |  0 |  0 |  0 |
+#+END_EXAMPLE
 
 Looks good to me :)
