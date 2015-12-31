@@ -8,12 +8,12 @@ WITH
                O.OrganisationID,
                CHARINDEX(' ', O.OrganisationName, 0) AS Position
             FROM
-               SourceDB.dbo.Organisations O
+               dbo.Organisations O
          UNION ALL SELECT
                O.OrganisationID,
                CHARINDEX(' ', O.OrganisationName, S.Position + 1) AS Position
             FROM
-               SourceDB.dbo.Organisations O
+               dbo.Organisations O
                INNER JOIN SpacePositions S
                   ON CHARINDEX(' ', O.OrganisationName, S.Position + 1) > S.Position
                      AND S.OrganisationID = O.OrganisationID
@@ -31,7 +31,7 @@ WITH
                O.OrganisationID,
                LEN(O.OrganisationName) AS Position
             FROM
-               SourceDB.dbo.Organisations O
+               dbo.Organisations O
       ),
    FirstChunk AS
       (
@@ -167,7 +167,7 @@ SELECT
       LTRIM(RTRIM(SUBSTRING(O.OrganisationName, C2.ChunkStart, 1 + C2.ChunkEnd - C2.ChunkStart))),
       LTRIM(RTRIM(SUBSTRING(O.OrganisationName, C3.ChunkStart, 1 + C3.ChunkEnd - C3.ChunkStart)))
    FROM
-      SourceDB.dbo.Organisations O
+      dbo.Organisations O
       INNER JOIN FirstChunk C1
          ON C1.OrganisationID = O.OrganisationID
       INNER JOIN SecondChunk C2
