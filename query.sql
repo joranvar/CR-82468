@@ -1,5 +1,5 @@
 DECLARE
-   @MaxLen int = 50;     // Maximum length of a target column
+   @MaxLen int = 50;     -- Maximum length of a target column
 
 WITH
    SpacePositions AS
@@ -18,7 +18,7 @@ WITH
                   ON CHARINDEX(' ', O.OrganisationName, S.Position + 1) > S.Position
                      AND S.OrganisationID = O.OrganisationID
       ),
-   SplitPositions AS      
+   SplitPositions AS
       (
          SELECT
                S.OrganisationID,
