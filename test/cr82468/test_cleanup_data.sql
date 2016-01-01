@@ -1,0 +1,2 @@
+TRUNCATE TABLE Organisations;
+TRUNCATE TABLE OrgStaging;

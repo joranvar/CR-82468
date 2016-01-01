@@ -1,10 +1,3 @@
-CREATE TABLE dbo.Organisations
-(
-    OrganisationID int IDENTITY(1,1) NOT NULL PRIMARY KEY,
-    OrganisationName nvarchar(180) NOT NULL
-    /* More columns omitted for brevity */
-);
-
 INSERT INTO Organisations ([OrganisationName])
 SELECT SUBSTRING(OrganisationName, 1, 180)
   FROM ( SELECT 'Microsoft Corporation'
@@ -15,13 +8,4 @@ SELECT SUBSTRING(OrganisationName, 1, 180)
          UNION ALL SELECT 'OneWordOnly'
          UNION ALL SELECT 'A' -- Single letter edge case
          UNION ALL SELECT '' -- Empty string edge case
-       ) Data(OrganisationName);
-
-CREATE TABLE dbo.OrgStaging
-(
-    OrganisationID int NOT NULL,
-    Name1 nvarchar(50) NOT NULL,
-    Name2 nvarchar(50) NOT NULL,
-    Name3 nvarchar(50) NOT NULL
-    /* More columns omitted for brevity */
-);
+      ) Data(OrganisationName);
